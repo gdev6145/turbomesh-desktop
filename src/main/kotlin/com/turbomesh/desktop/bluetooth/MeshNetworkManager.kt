@@ -27,12 +27,30 @@ class MeshNetworkManager(
     private val _inboundPackets = MutableSharedFlow<MeshMessage>(extraBufferCapacity = 128)
     val inboundPackets: SharedFlow<MeshMessage> = _inboundPackets.asSharedFlow()
 
+    // nodeId -> last seen timestamp
+    private val _nodeLastSeen = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val nodeLastSeen: StateFlow<Map<String, Long>> = _nodeLastSeen.asStateFlow()
+
+    // nodeId -> RSSI history
+    private val _rssiHistory = MutableStateFlow<Map<String, List<Int>>>(emptyMap())
+    val rssiHistory: StateFlow<Map<String, List<Int>>> = _rssiHistory.asStateFlow()
+
+    // typing: nodeId -> expiresAt
+    private val _typingNodes = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val typingNodes: StateFlow<Map<String, Long>> = _typingNodes.asStateFlow()
+
     val localNodeId: String = generateLocalId()
+
+    private val heartbeat = HeartbeatService(settingsStore, localNodeId) { msg ->
+        scope.launch { routeOutbound(msg) }
+    }
 
     init {
         scope.launch { observeBridge() }
         scope.launch { observeProximity() }
         scope.launch { loadStoredMessages() }
+        scope.launch { sweepTypingIndicators() }
+        heartbeat.start()
     }
 
     private fun generateLocalId(): String {
@@ -132,13 +150,45 @@ class MeshNetworkManager(
         }
     }
 
+    fun sendTyping(destinationId: String) {
+        val msg = MeshMessage(
+            sourceNodeId = localNodeId, destinationNodeId = destinationId,
+            type = MeshMessageType.TYPING, payload = localNodeId.toByteArray(),
+            ttl = 2,
+        )
+        scope.launch { routeOutbound(msg) }
+    }
+
+    fun sendReaction(targetMsgId: String, destinationId: String, emoji: String) {
+        sendMessage(destinationId, "$targetMsgId:$emoji".toByteArray(), MeshMessageType.REACTION)
+    }
+
     private fun handleInboundPacket(src: String, data: ByteArray) {
         try {
             val raw = deserializePacket(data) ?: return
-            val routed = router.routeMessage(raw) ?: return  // null = duplicate or TTL exhausted
+            val routed = router.routeMessage(raw) ?: return
+
+            // Update last-seen
+            _nodeLastSeen.value = _nodeLastSeen.value + (src to System.currentTimeMillis())
+
+            when (routed.type) {
+                MeshMessageType.HEARTBEAT -> {
+                    log.debug("Heartbeat from $src")
+                    _networkStats.value = _networkStats.value.copy(
+                        nearbyNodes = _networkStats.value.nearbyNodes + src
+                    )
+                    return // don't store heartbeats
+                }
+                MeshMessageType.TYPING -> {
+                    val expiry = System.currentTimeMillis() + 3_000
+                    _typingNodes.value = _typingNodes.value + (src to expiry)
+                    return
+                }
+                else -> {}
+            }
 
             val settings = settingsStore.current()
-            val payload = if (settings.encryptionEnabled) {
+            val payload = if (settings.encryptionEnabled && routed.type != MeshMessageType.BROADCAST) {
                 crypto.decrypt(routed.payload, src) ?: routed.payload
             } else routed.payload
 
@@ -148,9 +198,22 @@ class MeshNetworkManager(
             scope.launch { _inboundPackets.emit(received) }
             _networkStats.value = _networkStats.value.copy(messagesReceived = _networkStats.value.messagesReceived + 1)
 
-            AppDatabase.logRssi(src, -70)
+            // Log RSSI for the scanner's last known RSSI for this node
+            val rssi = bleScanner.scanResults.value.firstOrNull { it.id == src }?.rssi ?: -70
+            AppDatabase.logRssi(src, rssi)
+            val history = (_rssiHistory.value[src] ?: emptyList()) + rssi
+            _rssiHistory.value = _rssiHistory.value + (src to history.takeLast(60))
         } catch (e: Exception) {
             log.warn("Failed to parse inbound packet from $src: ${e.message}")
+        }
+    }
+
+    private suspend fun sweepTypingIndicators() {
+        while (true) {
+            delay(1_000)
+            val now = System.currentTimeMillis()
+            val pruned = _typingNodes.value.filterValues { it > now }
+            if (pruned.size != _typingNodes.value.size) _typingNodes.value = pruned
         }
     }
 
@@ -171,6 +234,7 @@ class MeshNetworkManager(
     fun stopScan() = bleScanner.stopScan()
 
     fun destroy() {
+        heartbeat.destroy()
         scope.cancel()
     }
 }

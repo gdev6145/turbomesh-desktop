@@ -34,6 +34,10 @@ class MeshRepository {
     val isBridgeConnected = bridgeManager.isConnected
     val proximityEvents = bleScanner.proximityEvents
     val networkStats = networkManager.networkStats
+    val nodeLastSeen = networkManager.nodeLastSeen
+    val rssiHistory = networkManager.rssiHistory
+    val typingNodes = networkManager.typingNodes
+    val inboundPackets = networkManager.inboundPackets
 
     val localNodeId: String get() = networkManager.localNodeId
     val publicKeyBytes: ByteArray get() = crypto.getPublicKeyBytes()
@@ -70,6 +74,10 @@ class MeshRepository {
 
     fun editMessage(msgId: String, newText: String) =
         networkManager.editMessage(msgId, newText.toByteArray())
+
+    fun sendTyping(destinationId: String) = networkManager.sendTyping(destinationId)
+    fun sendReaction(targetMsgId: String, destinationId: String, emoji: String) =
+        networkManager.sendReaction(targetMsgId, destinationId, emoji)
 
     fun deleteMessage(msgId: String) = networkManager.deleteMessage(msgId)
     fun pinMessage(msgId: String, pinned: Boolean) = networkManager.pinMessage(msgId, pinned)
