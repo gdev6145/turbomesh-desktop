@@ -6,6 +6,7 @@ exposed = "0.57.0"
 sqliteJdbc = "3.47.1.0"
 okhttp = "4.12.0"
 bluezDbus = "0.3.2"
+dbusTransport = "5.1.1"
 zxing = "3.5.3"
 logback = "1.4.14"
 
@@ -19,6 +20,7 @@ exposed-jdbc = { group = "org.jetbrains.exposed", name = "exposed-jdbc", version
 sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 bluez-dbus = { group = "com.github.hypfvieh", name = "bluez-dbus", version.ref = "bluezDbus" }
+dbus-transport-unix = { group = "com.github.hypfvieh", name = "dbus-java-transport-native-unixsocket", version.ref = "dbusTransport" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 logback = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
 

@@ -22,6 +22,7 @@ dependencies {
     implementation(libs.sqlite.jdbc)
     implementation(libs.okhttp)
     implementation(libs.bluez.dbus)
+    implementation(libs.dbus.transport.unix)
     implementation(libs.zxing.core)
     implementation(libs.logback)
 }
@@ -33,7 +34,7 @@ compose.desktop {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
             modules("java.sql", "java.naming", "java.security.jgss")
             packageName = "turbomesh"
-            packageVersion = "1.0.2"
+            packageVersion = "1.0.3"
             description = "TurboMesh — Bluetooth Mesh networking for desktop"
             vendor = "TurboMesh"
             linux { }
