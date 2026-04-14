@@ -1,0 +1,27 @@
+[versions]
+kotlin = "1.9.23"
+compose = "1.6.11"
+coroutines = "1.8.0"
+exposed = "0.57.0"
+sqliteJdbc = "3.47.1.0"
+okhttp = "4.12.0"
+bluezDbus = "0.3.2"
+zxing = "3.5.3"
+logback = "1.4.14"
+
+[libraries]
+compose-desktop-currentOs = { group = "org.jetbrains.compose.desktop", name = "desktop-jvm-linux-x64", version.ref = "compose" }
+coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "coroutines" }
+coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+exposed-core = { group = "org.jetbrains.exposed", name = "exposed-core", version.ref = "exposed" }
+exposed-dao = { group = "org.jetbrains.exposed", name = "exposed-dao", version.ref = "exposed" }
+exposed-jdbc = { group = "org.jetbrains.exposed", name = "exposed-jdbc", version.ref = "exposed" }
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+bluez-dbus = { group = "com.github.hypfvieh", name = "bluez-dbus", version.ref = "bluezDbus" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+logback = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }
