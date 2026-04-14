@@ -30,12 +30,17 @@ class MeshRepository {
     val messages: StateFlow<List<MeshMessage>> = networkManager.messages
     val scanResults = bleScanner.scanResults
     val isScanning = bleScanner.isScanning
+    val scanError = bleScanner.scanError
     val isBridgeConnected = bridgeManager.isConnected
     val proximityEvents = bleScanner.proximityEvents
     val networkStats = networkManager.networkStats
 
     val localNodeId: String get() = networkManager.localNodeId
     val publicKeyBytes: ByteArray get() = crypto.getPublicKeyBytes()
+
+    var proximityAlertsEnabled: Boolean
+        get() = bleScanner.proximityAlertsEnabled
+        set(v) { bleScanner.proximityAlertsEnabled = v }
 
     fun startScan() = networkManager.startScan()
     fun stopScan() = networkManager.stopScan()
@@ -80,11 +85,18 @@ class MeshRepository {
 
     fun updateSettings(s: MeshSettings) {
         settingsStore.update(s)
-        bleScanner.proximityThreshold = s.defaultTtl  // keep in sync if needed
         if (s.bridgeEnabled && s.bridgeServerUrl.isNotBlank()) {
             networkManager.connectBridge(s.bridgeServerUrl)
         } else if (!s.bridgeEnabled) {
             networkManager.disconnectBridge()
+        }
+    }
+
+    init {
+        // Auto-connect bridge if already configured
+        val s = settingsStore.current()
+        if (s.bridgeEnabled && s.bridgeServerUrl.isNotBlank()) {
+            networkManager.connectBridge(s.bridgeServerUrl)
         }
     }
 

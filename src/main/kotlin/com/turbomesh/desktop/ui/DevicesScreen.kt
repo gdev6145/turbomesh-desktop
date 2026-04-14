@@ -10,12 +10,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turbomesh.desktop.data.MeshRepository
-import com.turbomesh.desktop.mesh.MeshNode
 
 @Composable
 fun DevicesScreen(repo: MeshRepository) {
     val nodes by repo.scanResults.collectAsState()
     val isScanning by repo.isScanning.collectAsState()
+    val scanError by repo.scanError.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -24,19 +24,76 @@ fun DevicesScreen(repo: MeshRepository) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
             }
+            if (nodes.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { repo.clearScanResults() },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) { Text("Clear") }
+            }
             Button(onClick = { if (isScanning) repo.stopScan() else repo.startScan() }) {
                 Text(if (isScanning) "Stop" else "Scan")
             }
         }
-        Spacer(Modifier.height(12.dp))
+
+        Spacer(Modifier.height(8.dp))
+
+        // Error banner
+        scanError?.let { err ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Scan failed", fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text(err, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                    TextButton(onClick = { repo.clearScanResults() }) { Text("Dismiss") }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         if (nodes.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No mesh devices found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        if (isScanning) "Scanning for mesh devices…"
+                        else "Press Scan to discover nearby BLE devices",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!isScanning && scanError == null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Requires Bluetooth adapter + BlueZ running",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         } else {
+            Text("${nodes.size} device${if (nodes.size != 1) "s" else ""} found",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(nodes, key = { it.id }) { node ->
-                    NodeCard(node, repo)
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    val nickname = repo.getNickname(node.id)
+                                    Text(nickname.ifBlank { node.name }, fontWeight = FontWeight.SemiBold)
+                                    Text(node.address, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                RssiChip(node.rssi)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            NodeActions(node = node, repo = repo)
+                        }
+                    }
                 }
             }
         }
@@ -44,74 +101,57 @@ fun DevicesScreen(repo: MeshRepository) {
 }
 
 @Composable
-private fun NodeCard(node: MeshNode, repo: MeshRepository) {
+private fun NodeActions(node: com.turbomesh.desktop.mesh.MeshNode, repo: MeshRepository) {
     var showNicknameDialog by remember { mutableStateOf(false) }
     val nickname = repo.getNickname(node.id)
-    val displayName = if (nickname.isNotBlank()) nickname else node.name
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(displayName, fontWeight = FontWeight.SemiBold)
-                    Text(node.address, style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    RssiChip(node.rssi)
-                    if (node.isConnected) {
-                        Text("Connected", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showNicknameDialog = true }, modifier = Modifier.weight(1f)) {
-                    Text("Nickname")
-                }
-                Button(onClick = {
-                    repo.sendMessage(node.id, "PING")
-                }, modifier = Modifier.weight(1f)) {
-                    Text("Ping")
-                }
-            }
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = { showNicknameDialog = true },
+            modifier = Modifier.weight(1f)
+        ) { Text(if (nickname.isBlank()) "Nickname" else "Rename") }
+        Button(
+            onClick = { repo.sendMessage(node.id, "PING") },
+            modifier = Modifier.weight(1f)
+        ) { Text("Ping") }
+        Button(
+            onClick = { repo.broadcastMessage("Hello from ${repo.localNodeId}") },
+            modifier = Modifier.weight(1f)
+        ) { Text("Wave") }
     }
 
     if (showNicknameDialog) {
-        NicknameDialog(
-            currentName = nickname,
-            onConfirm = { name -> repo.setNickname(node.id, name); showNicknameDialog = false },
-            onDismiss = { showNicknameDialog = false }
+        var text by remember { mutableStateOf(nickname) }
+        AlertDialog(
+            onDismissRequest = { showNicknameDialog = false },
+            title = { Text("Set Nickname") },
+            text = {
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it },
+                    label = { Text("Nickname") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { repo.setNickname(node.id, text); showNicknameDialog = false }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = { TextButton(onClick = { showNicknameDialog = false }) { Text("Cancel") } }
         )
     }
 }
 
 @Composable
 private fun RssiChip(rssi: Int) {
-    val color = when {
-        rssi >= -65 -> MaterialTheme.colorScheme.primary
-        rssi >= -80 -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.error
+    val (color, label) = when {
+        rssi >= -65 -> MaterialTheme.colorScheme.primary to "Strong"
+        rssi >= -80 -> MaterialTheme.colorScheme.tertiary to "Fair"
+        else -> MaterialTheme.colorScheme.error to "Weak"
     }
-    Surface(color = color.copy(alpha = 0.12f), shape = MaterialTheme.shapes.small) {
-        Text("$rssi dBm", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+    Surface(color = color.copy(alpha = 0.15f), shape = MaterialTheme.shapes.small) {
+        Text("$rssi dBm • $label",
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall, color = color)
     }
-}
-
-@Composable
-private fun NicknameDialog(currentName: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
-    var text by remember { mutableStateOf(currentName) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set Nickname") },
-        text = {
-            OutlinedTextField(value = text, onValueChange = { text = it },
-                label = { Text("Nickname") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
-    )
 }

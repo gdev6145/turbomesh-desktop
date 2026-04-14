@@ -30,8 +30,8 @@ fun MessagingScreen(repo: MeshRepository) {
     var replyToMsg by remember { mutableStateOf<MeshMessage?>(null) }
     var editingMsg by remember { mutableStateOf<MeshMessage?>(null) }
 
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     val visibleMessages = remember(messages, selectedDestination) {
         messages.filter { it.deletedAtMs == null }.filter { msg ->
@@ -46,19 +46,33 @@ fun MessagingScreen(repo: MeshRepository) {
         if (visibleMessages.isNotEmpty()) listState.animateScrollToItem(visibleMessages.size - 1)
     }
 
+    fun sendOrEdit() {
+        if (inputText.isBlank()) return
+        if (editingMsg != null) {
+            repo.editMessage(editingMsg!!.id, inputText)
+        } else if (selectedDestination == MeshMessage.BROADCAST_DESTINATION) {
+            repo.broadcastMessage(inputText)
+        } else {
+            repo.sendMessage(selectedDestination, inputText, replyToMsgId = replyToMsg?.id)
+        }
+        inputText = ""; replyToMsg = null; editingMsg = null
+        coroutineScope.launch { if (visibleMessages.isNotEmpty()) listState.animateScrollToItem(visibleMessages.size - 1) }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Destination selector
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp),
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text("To: ", fontWeight = FontWeight.Bold)
+            Text("To:", fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(8.dp))
+
             val destinations = listOf(MeshMessage.BROADCAST_DESTINATION) + nodes.map { it.id }
             var expanded by remember { mutableStateOf(false) }
             Box {
                 OutlinedButton(onClick = { expanded = true }) {
-                    val nick = if (selectedDestination == MeshMessage.BROADCAST_DESTINATION) "Everyone (Broadcast)"
+                    val label = if (selectedDestination == MeshMessage.BROADCAST_DESTINATION) "Everyone (Broadcast)"
                     else repo.getNickname(selectedDestination).ifBlank { selectedDestination }
-                    Text(nick)
+                    Text(label)
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     destinations.forEach { dest ->
@@ -72,8 +86,14 @@ fun MessagingScreen(repo: MeshRepository) {
                     }
                 }
             }
+
+            Spacer(Modifier.weight(1f))
+            Text("${visibleMessages.size} messages",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Divider()
+
+        HorizontalDivider()
 
         // Message list
         LazyColumn(
@@ -82,11 +102,20 @@ fun MessagingScreen(repo: MeshRepository) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
+            if (visibleMessages.isEmpty()) {
+                item {
+                    Box(Modifier.fillParentMaxWidth().padding(top = 40.dp),
+                        contentAlignment = Alignment.Center) {
+                        Text("No messages yet — send something!",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
             items(visibleMessages, key = { it.id }) { msg ->
                 MessageBubble(
                     msg = msg,
                     isMine = msg.sourceNodeId == repo.localNodeId,
-                    senderName = repo.getNickname(msg.sourceNodeId).ifBlank { msg.sourceNodeId },
+                    senderName = repo.getNickname(msg.sourceNodeId).ifBlank { msg.sourceNodeId.take(8) },
                     onReply = { replyToMsg = msg },
                     onEdit = { editingMsg = msg; inputText = String(msg.payload) },
                     onDelete = { repo.deleteMessage(msg.id) },
@@ -96,63 +125,52 @@ fun MessagingScreen(repo: MeshRepository) {
             }
         }
 
-        // Reply banner
-        replyToMsg?.let { reply ->
+        // Reply/edit banner
+        val banner = editingMsg ?: replyToMsg
+        if (banner != null) {
             Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
                 Row(modifier = Modifier.fillMaxWidth().padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Replying to:", style = MaterialTheme.typography.labelSmall)
-                        Text(String(reply.payload).take(60), style = MaterialTheme.typography.bodySmall)
+                        Text(if (editingMsg != null) "Editing message" else "Replying to:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Text(String(banner.payload).take(80),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer)
                     }
-                    TextButton(onClick = { replyToMsg = null }) { Text("×") }
+                    TextButton(onClick = { replyToMsg = null; editingMsg = null; inputText = "" }) {
+                        Text("Cancel")
+                    }
                 }
             }
         }
 
+        HorizontalDivider()
+
         // Input row
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.Bottom) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                modifier = Modifier.weight(1f).onKeyEvent { event ->
-                    if (event.key == Key.Enter && !event.isShiftPressed && event.type == KeyEventType.KeyDown) {
-                        sendOrEdit(repo, inputText, selectedDestination, replyToMsg, editingMsg)
-                        inputText = ""; replyToMsg = null; editingMsg = null; true
+                modifier = Modifier.weight(1f).onPreviewKeyEvent { event ->
+                    if (event.key == Key.Enter && !event.isShiftPressed
+                        && event.type == KeyEventType.KeyDown) {
+                        sendOrEdit(); true
                     } else false
                 },
                 placeholder = { Text("Message… (Enter to send, Shift+Enter for newline)") },
-                maxLines = 5,
+                maxLines = 6,
             )
             Spacer(Modifier.width(8.dp))
             Button(
-                onClick = {
-                    sendOrEdit(repo, inputText, selectedDestination, replyToMsg, editingMsg)
-                    inputText = ""; replyToMsg = null; editingMsg = null
-                },
-                enabled = inputText.isNotBlank()
+                onClick = { sendOrEdit() },
+                enabled = inputText.isNotBlank(),
+                modifier = Modifier.height(56.dp)
             ) {
                 Text(if (editingMsg != null) "Update" else "Send")
             }
         }
-    }
-}
-
-private fun sendOrEdit(
-    repo: MeshRepository,
-    text: String,
-    dest: String,
-    replyTo: MeshMessage?,
-    editing: MeshMessage?,
-) {
-    if (text.isBlank()) return
-    if (editing != null) {
-        repo.editMessage(editing.id, text)
-    } else if (dest == MeshMessage.BROADCAST_DESTINATION) {
-        repo.broadcastMessage(text)
-    } else {
-        repo.sendMessage(dest, text, replyToMsgId = replyTo?.id)
     }
 }
 
@@ -178,8 +196,14 @@ private fun MessageBubble(
         Box {
             Column(
                 modifier = Modifier
-                    .widthIn(max = 480.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .widthIn(max = 520.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 16.dp, topEnd = 16.dp,
+                            bottomStart = if (isMine) 16.dp else 4.dp,
+                            bottomEnd = if (isMine) 4.dp else 16.dp
+                        )
+                    )
                     .background(
                         if (isMine) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surfaceVariant
@@ -188,15 +212,18 @@ private fun MessageBubble(
             ) {
                 if (!isMine) {
                     Text(senderName, style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary)
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold)
                 }
                 if (msg.isPinned) {
-                    Text("📌 Pinned", style = MaterialTheme.typography.labelSmall, fontStyle = FontStyle.Italic)
+                    Text("📌", style = MaterialTheme.typography.labelSmall)
                 }
                 msg.replyToMsgId?.let {
-                    Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(6.dp)) {
-                        Text("↩ Reply", modifier = Modifier.padding(4.dp),
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text("↩ Reply", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall)
                     }
                     Spacer(Modifier.height(2.dp))
@@ -207,16 +234,27 @@ private fun MessageBubble(
                         fontStyle = FontStyle.Italic,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Row(modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start) {
-                    Text(
-                        formatTime(msg.timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (isMine && msg.isAcknowledged) {
-                        Text(" ✓✓", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(formatTime(msg.timestamp), style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (isMine) {
+                        Text(if (msg.isAcknowledged) " ✓✓" else " ✓",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (msg.isAcknowledged) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    TextButton(
+                        onClick = { showMenu = true },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(16.dp).widthIn(min = 24.dp)
+                    ) {
+                        Text("•••", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -224,10 +262,14 @@ private fun MessageBubble(
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(text = { Text("Reply") }, onClick = { onReply(); showMenu = false })
                 if (isMine) DropdownMenuItem(text = { Text("Edit") }, onClick = { onEdit(); showMenu = false })
-                DropdownMenuItem(text = { Text(if (msg.isPinned) "Unpin" else "Pin") },
-                    onClick = { onPin(); showMenu = false })
-                if (isMine) DropdownMenuItem(text = { Text("Delete") },
-                    onClick = { onDelete(); showMenu = false })
+                DropdownMenuItem(
+                    text = { Text(if (msg.isPinned) "Unpin" else "Pin") },
+                    onClick = { onPin(); showMenu = false }
+                )
+                if (isMine) DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    onClick = { onDelete(); showMenu = false }
+                )
             }
         }
     }

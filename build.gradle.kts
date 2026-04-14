@@ -31,8 +31,9 @@ compose.desktop {
         mainClass = "com.turbomesh.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
+            modules("java.sql", "java.naming", "java.security.jgss")
             packageName = "turbomesh"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.2"
             description = "TurboMesh — Bluetooth Mesh networking for desktop"
             vendor = "TurboMesh"
             linux { }

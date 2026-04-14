@@ -25,6 +25,9 @@ class BleScanner {
     var proximityThreshold: Int = -75
     var proximityAlertsEnabled: Boolean = false
 
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError.asStateFlow()
+
     private var scanJob: Job? = null
     private val knownNearby = mutableSetOf<String>()
     private var manager: DeviceManager? = null
@@ -49,6 +52,7 @@ class BleScanner {
                 }
             } catch (e: Exception) {
                 log.warn("BLE scan error: ${e.message}")
+                _scanError.value = e.message ?: "Unknown BLE error"
             } finally {
                 _isScanning.value = false
             }
@@ -62,7 +66,7 @@ class BleScanner {
         _isScanning.value = false
     }
 
-    fun clearResults() { _scanResults.value = emptyList(); knownNearby.clear() }
+    fun clearResults() { _scanResults.value = emptyList(); knownNearby.clear(); _scanError.value = null }
 
     private fun hasMeshService(device: BluetoothDevice): Boolean =
         device.uuids?.any { it.toString().lowercase() == MESH_UUID } ?: true  // show all if UUIDs not yet resolved
