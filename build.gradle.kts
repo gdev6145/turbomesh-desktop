@@ -36,7 +36,7 @@ compose.desktop {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
             modules("java.sql", "java.naming", "java.security.jgss")
             packageName = "turbomesh"
-            packageVersion = "1.1.0"
+            packageVersion = "1.2.0"
             description = "TurboMesh — Bluetooth Mesh networking for desktop"
             vendor = "TurboMesh"
             linux { }

@@ -17,6 +17,16 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
 import com.turbomesh.desktop.data.MeshRepository
 import kotlinx.coroutines.delay
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Root composable
@@ -54,6 +64,7 @@ private val TABS: List<TabMeta> = listOf(
     TabMeta({ it.tabSettings })   { repo -> SettingsScreen(repo, onThemeToggle = { /* handled via settings flow */ }) },
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppShell(repo: MeshRepository) {
     val settings by repo.settingsStore.settings.collectAsState()
@@ -127,6 +138,29 @@ private fun AppShell(repo: MeshRepository) {
     ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
+                val settingsIndex = TABS.indexOfFirst { it.labelFn(s) == s.tabSettings }
+                        // Top app header
+                        TopAppBar(
+                            title = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                        .padding(4.dp), contentAlignment = Alignment.Center) {
+                                        Text("TM", color = Color.White, fontSize = 12.sp)
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("TurboMesh", style = MaterialTheme.typography.titleMedium)
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { selectedTab = settingsIndex.coerceAtLeast(0) }) {
+                                    Text("⚙️")
+                                }
+                            }
+                        )
+
                 // ── Tab row + Detach Button ──────────────────────────────────
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     ScrollableTabRow(

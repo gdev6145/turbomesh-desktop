@@ -85,6 +85,7 @@ fun main(args: Array<String>) {
                 onCloseRequest = { windowVisible = false },  // minimize to tray instead of quit
                 state = windowState,
                 title = if (unreadCount.value > 0) "TurboMesh (${unreadCount.value})" else "TurboMesh Desktop",
+                icon = trayIcon,
             ) {
                 LaunchedEffect(windowVisible) { if (windowVisible) unreadCount.value = 0 }
                 App(repo)

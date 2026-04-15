@@ -101,6 +101,13 @@ fun SettingsScreen(repo: MeshRepository, onThemeToggle: (Boolean) -> Unit) {
                 update(draft.copy(soundEnabled = it))
             }
 
+            // ── Telemetry / Usage Reporting ─────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            SectionHeader("Usage & Telemetry")
+            SwitchRow("Share anonymous usage data", "Helps improve TurboMesh (opt-in)", draft.telemetryEnabled) {
+                update(draft.copy(telemetryEnabled = it))
+            }
+
             // ── Status ───────────────────────────────────────────────────
             Spacer(Modifier.height(8.dp))
             SectionHeader(s.userStatus)

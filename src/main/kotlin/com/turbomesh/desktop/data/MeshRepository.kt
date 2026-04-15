@@ -33,6 +33,9 @@ class MeshRepository {
     private val router = MeshRouter()
     private val crypto = CryptoManager()
 
+    // Telemetry (writes local log when enabled)
+    private val telemetry = Telemetry(settingsStore)
+
     val networkManager = MeshNetworkManager(
         bleScanner = bleScanner,
         bridgeManager = bridgeManager,
@@ -87,17 +90,22 @@ class MeshRepository {
         replyToMsgId: String? = null,
         scheduledAtMs: Long? = null,
         expiresAtMs: Long? = null,
-    ) = networkManager.sendMessage(
-        destinationId = destinationId,
-        payload = text.toByteArray(),
-        type = type,
-        replyToMsgId = replyToMsgId,
-        scheduledAtMs = scheduledAtMs,
-        expiresAtMs = expiresAtMs,
-    )
+    ) {
+        networkManager.sendMessage(
+            destinationId = destinationId,
+            payload = text.toByteArray(),
+            type = type,
+            replyToMsgId = replyToMsgId,
+            scheduledAtMs = scheduledAtMs,
+            expiresAtMs = expiresAtMs,
+        )
+        telemetry.logEvent("send_message", mapOf("destination" to destinationId, "type" to type.name))
+    }
 
     fun broadcastMessage(text: String) =
-        sendMessage(MeshMessage.BROADCAST_DESTINATION, text, MeshMessageType.BROADCAST)
+        sendMessage(MeshMessage.BROADCAST_DESTINATION, text, MeshMessageType.BROADCAST).also {
+            telemetry.logEvent("broadcast", mapOf("length" to text.length.toString()))
+        }
 
     fun editMessage(msgId: String, newText: String) =
         networkManager.editMessage(msgId, newText.toByteArray())

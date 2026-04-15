@@ -22,6 +22,8 @@ data class MeshSettings(
     val appLanguage: String = "en",
     // Notifications
     val soundEnabled: Boolean = true,
+    // Telemetry / usage reporting opt-in
+    val telemetryEnabled: Boolean = false,
     // Presence
     val userStatus: String = "available", // available | away | busy | dnd
     // Appearance
@@ -57,6 +59,7 @@ class SettingsStore {
         prefs.put("user_status", s.userStatus)
         prefs.putFloat("font_scale", s.fontScale)
         prefs.put("muted_destinations", s.mutedDestinations)
+        prefs.putBoolean("telemetry_enabled", s.telemetryEnabled)
         prefs.put("quick_replies", s.quickReplies)
         prefs.putBoolean("auto_reply_enabled", s.autoReplyEnabled)
         prefs.put("auto_reply_message", s.autoReplyMessage)
@@ -82,6 +85,7 @@ class SettingsStore {
         userStatus = prefs.get("user_status", "available"),
         fontScale = prefs.getFloat("font_scale", 1.0f),
         mutedDestinations = prefs.get("muted_destinations", ""),
+        telemetryEnabled = prefs.getBoolean("telemetry_enabled", false),
         quickReplies = prefs.get("quick_replies", "👋 Hello|OK|On my way|Be right back|Can't talk now"),
         autoReplyEnabled = prefs.getBoolean("auto_reply_enabled", false),
         autoReplyMessage = prefs.get("auto_reply_message", "I'm currently away. I'll get back to you soon."),

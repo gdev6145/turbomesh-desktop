@@ -38,31 +38,39 @@ class BridgeManager {
         webSocket?.close(1001, "Reconnecting")
         webSocket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
+                if (lastUrl != url) {
+                    ws.close(1000, "Superseded")
+                    return
+                }
                 _isConnected.value = true
                 log.info("Bridge connected to $url")
                 flushOfflineQueue()
             }
-            override fun onMessage(ws: WebSocket, text: String) { parseRelayMessage(text) }
+            override fun onMessage(ws: WebSocket, text: String) {
+                if (lastUrl == url) parseRelayMessage(text)
+            }
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                if (lastUrl != url) return
                 _isConnected.value = false
                 log.warn("Bridge failure: ${t.message}")
-                scheduleReconnect()
+                scheduleReconnect(url)
             }
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                if (lastUrl != url) return
                 _isConnected.value = false
-                if (code != 1000) scheduleReconnect()
+                if (code != 1000) scheduleReconnect(url)
             }
         })
     }
 
-    private fun scheduleReconnect() {
-        val url = lastUrl ?: return
+    private fun scheduleReconnect(url: String) {
+        if (lastUrl != url) return
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             var delayMs = 2_000L
-            while (isActive && !_isConnected.value && lastUrl != null) {
+            while (isActive && !_isConnected.value && lastUrl == url) {
                 delay(delayMs)
-                if (!_isConnected.value && lastUrl != null) {
+                if (!_isConnected.value && lastUrl == url) {
                     log.info("Bridge reconnecting (retry)…")
                     doConnect(url)
                     delayMs = (delayMs * 2).coerceAtMost(60_000L)
@@ -116,14 +124,9 @@ class BridgeManager {
     }
 
     private fun parseRelayMessage(json: String) {
-        val src = Regex(""""src"\s*:\s*"([^"\\]+)"""").find(json)?.groupValues?.get(1) ?: return
-        val data = Regex(""""data"\s*:\s*"([A-Za-z0-9+/=\n]+)"""").find(json)?.groupValues?.get(1) ?: return
+        val relay = parseRelayEnvelope(json) ?: return
         scope.launch {
-            try {
-                _inboundMessages.emit(src to Base64.getDecoder().decode(data.replace("\n", "")))
-            } catch (e: Exception) {
-                log.warn("Failed to decode relay message: ${e.message}")
-            }
+            _inboundMessages.emit(relay.sourceId to relay.payload)
         }
     }
 
@@ -141,4 +144,61 @@ class BridgeManager {
         .replace("\n", "\\n")
         .replace("\r", "\\r")
         .replace("\t", "\\t")
+}
+
+internal data class RelayEnvelope(
+    val sourceId: String,
+    val payload: ByteArray,
+)
+
+internal fun parseRelayEnvelope(json: String): RelayEnvelope? {
+    val src = extractJsonString(json, "src") ?: return null
+    val data = extractJsonString(json, "data") ?: return null
+    val payload = try {
+        Base64.getDecoder().decode(data.filterNot(Char::isWhitespace))
+    } catch (_: IllegalArgumentException) {
+        return null
+    }
+    return RelayEnvelope(sourceId = src, payload = payload)
+}
+
+internal fun extractJsonString(json: String, key: String): String? {
+    val pattern = Regex(""""${Regex.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"""")
+    val encoded = pattern.find(json)?.groupValues?.get(1) ?: return null
+    return encoded.jsonUnescape()
+}
+
+private fun String.jsonUnescape(): String {
+    val out = StringBuilder(length)
+    var i = 0
+    while (i < length) {
+        val ch = this[i]
+        if (ch != '\\') {
+            out.append(ch)
+            i++
+            continue
+        }
+        if (i + 1 >= length) return out.toString()
+        when (val escaped = this[i + 1]) {
+            '\\' -> out.append('\\')
+            '"' -> out.append('"')
+            '/' -> out.append('/')
+            'b' -> out.append('\b')
+            'f' -> out.append('\u000C')
+            'n' -> out.append('\n')
+            'r' -> out.append('\r')
+            't' -> out.append('\t')
+            'u' -> {
+                val hexEnd = i + 6
+                if (hexEnd > length) return null
+                val codePoint = substring(i + 2, hexEnd).toIntOrNull(16) ?: return null
+                out.append(codePoint.toChar())
+                i = hexEnd
+                continue
+            }
+            else -> out.append(escaped)
+        }
+        i += 2
+    }
+    return out.toString()
 }
