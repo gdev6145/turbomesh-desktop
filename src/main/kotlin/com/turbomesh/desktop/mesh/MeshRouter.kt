@@ -11,6 +11,7 @@ class MeshRouter {
     fun registerRoute(destinationId: String, hops: List<String>) { routingTable[destinationId] = hops.toMutableList() }
     fun removeRoute(nodeId: String) { routingTable.remove(nodeId) }
     fun hasRoute(destinationId: String) = destinationId == MeshMessage.BROADCAST_DESTINATION || routingTable.containsKey(destinationId)
+    fun getPath(destinationId: String): List<String> = routingTable[destinationId]?.toList() ?: emptyList()
     fun nextHop(destinationId: String): String? = routingTable[destinationId]?.let { if (it.isEmpty()) destinationId else it.first() }
     fun knownNodes(): Set<String> = routingTable.keys.toSet()
     fun clearRoutes() = routingTable.clear()
