@@ -1,0 +1,47 @@
+<h2>Which feature first?</h2>
+<p class="subtitle">Pick one to start with — we'll spec, plan, and build it, then move to the next</p>
+
+<div class="options">
+  <div class="option" data-choice="map" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Node Map / Topology Viz</h3>
+      <p>Visual mesh graph — most impactful for understanding your network at a glance</p>
+    </div>
+  </div>
+  <div class="option" data-choice="voice" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Voice / Push-to-Talk</h3>
+      <p>Opcodes already exist — this is about wiring up a working UI for audio over mesh</p>
+    </div>
+  </div>
+  <div class="option" data-choice="channels" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Channels / Topics</h3>
+      <p>Named broadcast channels — extends the group system that's already partially there</p>
+    </div>
+  </div>
+  <div class="option" data-choice="dashboard" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Telemetry Dashboard</h3>
+      <p>Real-time charts and stats from TELEMETRY packets — visibility into mesh health</p>
+    </div>
+  </div>
+  <div class="option" data-choice="emergency" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Emergency / Alert System</h3>
+      <p>Priority broadcast alerts that interrupt the UI — safety-critical feature</p>
+    </div>
+  </div>
+  <div class="option" data-choice="scripting" onclick="toggleSelect(this)">
+    <div class="letter">F</div>
+    <div class="content">
+      <h3>Automation / Scripting</h3>
+      <p>Event-triggered actions — power-user feature, most complex to design well</p>
+    </div>
+  </div>
+</div>

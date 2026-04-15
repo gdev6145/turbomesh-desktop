@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turbomesh.desktop.data.MeshRepository
@@ -73,7 +74,6 @@ private fun TopologyGraph(
     getNickname: (String) -> String,
     modifier: Modifier = Modifier,
 ) {
-    val colorScheme = MaterialTheme.colorScheme
     var hoveredId by remember { mutableStateOf<String?>(null) }
 
     // Build positions — local node in centre, others in a circle, then run spring simulation
@@ -124,7 +124,7 @@ private fun TopologyGraph(
         }
     }
 
-    Box(modifier.pointerInput(positions) {
+    BoxWithConstraints(modifier.pointerInput(positions) {
         detectTapGestures(
             onPress = { offset ->
                 val w = size.width.toFloat()
@@ -137,6 +137,9 @@ private fun TopologyGraph(
             }
         )
     }) {
+        val canvasWidthDp = maxWidth
+        val canvasHeightDp = maxHeight
+
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
@@ -193,18 +196,14 @@ private fun TopologyGraph(
                     val nick = getNickname(np.id)
                     if (nick.isNotBlank()) nick else np.id.take(8)
                 }
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .wrapContentSize(Alignment.TopStart)
-                        .padding(
-                            start = (np.x * 1000).dp,
-                            top = (np.y * 600 + 18).dp
-                        )
-                ) {
+                // Position labels relative to actual canvas size; offset left by ~24dp to center
+                val nodeRadiusDp = if (isLocal) 22.dp else 14.dp
+                val xDp = canvasWidthDp * np.x - 24.dp
+                val yDp = canvasHeightDp * np.y + nodeRadiusDp + 2.dp
+                Box(Modifier.absoluteOffset(xDp.coerceAtLeast(0.dp), yDp)) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
                     ) {
                         Text(
                             label,

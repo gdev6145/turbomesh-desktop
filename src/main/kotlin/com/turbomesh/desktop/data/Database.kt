@@ -73,7 +73,10 @@ object AppDatabase {
     fun clearMessages() = transaction { MessagesTable.deleteAll() }
 
     fun markAcknowledged(msgId: String) = transaction {
-        MessagesTable.update({ MessagesTable.id eq msgId }) { it[isAcknowledged] = true }
+        MessagesTable.update({ MessagesTable.id eq msgId }) { 
+            it[isAcknowledged] = true 
+            it[pendingDelivery] = false
+        }
     }
 
     fun markRead(msgId: String, atMs: Long) = transaction {
@@ -96,6 +99,11 @@ object AppDatabase {
 
     fun getPinnedMessages(): List<MeshMessage> = transaction {
         MessagesTable.selectAll().where { MessagesTable.isPinned eq true }
+            .orderBy(MessagesTable.timestamp).map { rowToMessage(it) }
+    }
+
+    fun getPendingMessages(nodeId: String): List<MeshMessage> = transaction {
+        MessagesTable.selectAll().where { (MessagesTable.destinationNodeId eq nodeId) and (MessagesTable.pendingDelivery eq true) }
             .orderBy(MessagesTable.timestamp).map { rowToMessage(it) }
     }
 

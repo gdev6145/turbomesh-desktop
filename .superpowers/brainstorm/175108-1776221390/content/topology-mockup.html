@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Topology Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #e0e0e0; height: 100vh; overflow: hidden; }
+
+  .shell { display: flex; flex-direction: column; height: 100vh; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    background: #16213e; border-bottom: 1px solid #0f3460;
+    flex-shrink: 0;
+  }
+  .topbar h2 { font-size: 16px; font-weight: 600; margin-right: auto; }
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    background: #0f3460; border: 1px solid #1a4a7a; border-radius: 6px;
+    color: #e0e0e0; padding: 5px 10px 5px 28px; font-size: 13px; width: 180px; outline: none;
+  }
+  .search-wrap::before { content: '⌕'; position: absolute; left: 8px; top: 5px; font-size: 14px; color: #8899bb; }
+  .chip {
+    background: #0f3460; border: 1px solid #1a4a7a; border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; user-select: none; color: #c0d0f0;
+  }
+  .chip.active { background: #1565c0; border-color: #42a5f5; color: #fff; }
+  .label-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8899bb; }
+  .toggle { width: 32px; height: 18px; background: #1565c0; border-radius: 9px; position: relative; cursor: pointer; }
+  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: #fff; border-radius: 50%; top: 2px; right: 2px; }
+
+  /* Main area */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Canvas area */
+  .canvas-wrap {
+    flex: 1; position: relative; background: #0d1b2a; overflow: hidden; cursor: grab;
+  }
+  .canvas-wrap:active { cursor: grabbing; }
+
+  svg { width: 100%; height: 100%; }
+
+  /* Zoom controls */
+  .zoom-controls {
+    position: absolute; bottom: 16px; left: 16px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .zoom-btn {
+    width: 32px; height: 32px; background: #16213e; border: 1px solid #0f3460;
+    border-radius: 6px; color: #e0e0e0; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; user-select: none;
+  }
+
+  /* Legend */
+  .legend {
+    position: absolute; bottom: 16px; right: 16px;
+    background: rgba(22,33,62,0.9); border: 1px solid #0f3460; border-radius: 8px;
+    padding: 8px 12px; display: flex; gap: 12px; font-size: 11px; color: #8899bb;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Detail panel */
+  .detail-panel {
+    width: 240px; background: #16213e; border-left: 1px solid #0f3460;
+    display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+  }
+  .panel-header {
+    padding: 12px 14px; border-bottom: 1px solid #0f3460; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-node-dot { width: 14px; height: 14px; border-radius: 50%; background: #66bb6a; flex-shrink: 0; }
+  .panel-name { font-size: 14px; font-weight: 600; }
+  .panel-sub { font-size: 11px; color: #8899bb; }
+  .panel-close { margin-left: auto; cursor: pointer; color: #8899bb; font-size: 16px; }
+
+  .panel-section { padding: 10px 14px; border-bottom: 1px solid #0f3460; }
+  .panel-section h4 { font-size: 11px; text-transform: uppercase; color: #8899bb; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+  .stat-val { color: #c0d0f0; font-weight: 500; }
+
+  /* Mini RSSI chart */
+  .mini-chart { height: 40px; background: #0d1b2a; border-radius: 4px; position: relative; overflow: hidden; }
+  .chart-bar {
+    position: absolute; bottom: 0; width: 6px; border-radius: 2px 2px 0 0;
+    background: #42a5f5;
+  }
+
+  .panel-btn {
+    margin: 10px 14px; background: #1565c0; color: #fff; border: none; border-radius: 6px;
+    padding: 7px 0; font-size: 13px; cursor: pointer; font-weight: 500; width: calc(100% - 28px);
+  }
+
+  /* Animated packet dot — pure CSS */
+  @keyframes travel { 0% { offset-distance: 0%; opacity: 1; } 90% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+  .packet-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #42a5f5;
+    position: absolute; offset-path: path('M 220 260 Q 320 180 430 200');
+    animation: travel 1.4s linear infinite;
+    box-shadow: 0 0 6px #42a5f5;
+  }
+  .packet-dot.b { background: #ffd54f; box-shadow: 0 0 6px #ffd54f; animation-delay: 0.7s; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Top bar -->
+  <div class="topbar">
+    <h2>Network Topology</h2>
+    <div class="search-wrap"><input placeholder="Find node…" value=""></div>
+    <div class="chip active">Labels ✓</div>
+    <div class="chip">Paths</div>
+    <div class="chip">Reset Layout</div>
+  </div>
+
+  <div class="main">
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <svg viewBox="0 0 700 480" xmlns="http://www.w3.org/2000/svg">
+        <!-- Peer-to-peer edges (dashed, inferred from routing table) -->
+        <line x1="310" y1="175" x2="430" y2="200" stroke="#3a5f8a" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+        <line x1="430" y1="200" x2="520" y2="300" stroke="#3a5f8a" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+        <line x1="310" y1="175" x2="180" y2="300" stroke="#3a5f8a" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+        <line x1="520" y1="300" x2="430" y2="380" stroke="#3a5f8a" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.6"/>
+
+        <!-- Local → peer edges (solid) -->
+        <line x1="340" y1="260" x2="310" y2="175" stroke="#1565c0" stroke-width="2" opacity="0.7"/>
+        <line x1="340" y1="260" x2="430" y2="200" stroke="#1565c0" stroke-width="2" opacity="0.7"/>
+        <line x1="340" y1="260" x2="180" y2="300" stroke="#ffca28" stroke-width="1.5" opacity="0.6"/>
+        <line x1="340" y1="260" x2="520" y2="300" stroke="#ef5350" stroke-width="1.2" opacity="0.5"/>
+        <line x1="340" y1="260" x2="430" y2="380" stroke="#ef5350" stroke-width="1.2" opacity="0.4"/>
+
+        <!-- Hop count labels on edges -->
+        <text x="323" y="210" font-size="9" fill="#8899bb">1 hop</text>
+        <text x="386" y="222" font-size="9" fill="#8899bb">1 hop</text>
+        <text x="240" y="278" font-size="9" fill="#8899bb">2 hops</text>
+
+        <!-- Peer nodes -->
+        <!-- Node B — strong -->
+        <circle cx="310" cy="175" r="16" fill="#66bb6a"/>
+        <circle cx="310" cy="175" r="8" fill="rgba(255,255,255,0.15)"/>
+        <text x="310" y="154" text-anchor="middle" font-size="11" fill="#c0e0c0" font-weight="500">Alpha</text>
+
+        <!-- Node C — strong -->
+        <circle cx="430" cy="200" r="16" fill="#66bb6a"/>
+        <circle cx="430" cy="200" r="8" fill="rgba(255,255,255,0.15)"/>
+        <text x="430" y="179" text-anchor="middle" font-size="11" fill="#c0e0c0" font-weight="500">Beta</text>
+
+        <!-- Node D — fair -->
+        <circle cx="180" cy="300" r="14" fill="#ffca28"/>
+        <text x="180" y="279" text-anchor="middle" font-size="11" fill="#ffe082">Gamma</text>
+
+        <!-- Node E — weak, highlighted (filter match) -->
+        <circle cx="520" cy="300" r="14" fill="#ef5350" opacity="0.4"/>
+        <text x="520" y="279" text-anchor="middle" font-size="11" fill="#ef9a9a" opacity="0.4">D7D7BB32</text>
+
+        <!-- Node F — weak, dimmed -->
+        <circle cx="430" cy="380" r="14" fill="#ef5350" opacity="0.4"/>
+        <text x="430" y="360" text-anchor="middle" font-size="11" fill="#ef9a9a" opacity="0.4">EE12AC90</text>
+
+        <!-- Local node (selected / highlighted) -->
+        <circle cx="340" cy="260" r="26" fill="rgba(66,165,245,0.2)"/>
+        <circle cx="340" cy="260" r="22" fill="#1565c0"/>
+        <circle cx="340" cy="260" r="10" fill="rgba(255,255,255,0.2)"/>
+        <text x="340" y="252" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">Me</text>
+        <text x="340" y="264" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.7)">D7D7BB32</text>
+      </svg>
+
+      <!-- Animated packet dot -->
+      <div class="packet-dot"></div>
+      <div class="packet-dot b"></div>
+
+      <!-- Zoom controls -->
+      <div class="zoom-controls">
+        <div class="zoom-btn">+</div>
+        <div class="zoom-btn">−</div>
+        <div class="zoom-btn" style="font-size:12px">⊙</div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <div class="legend-item"><span class="dot" style="background:#66bb6a"></span> Strong</div>
+        <div class="legend-item"><span class="dot" style="background:#ffca28"></span> Fair</div>
+        <div class="legend-item"><span class="dot" style="background:#ef5350"></span> Weak</div>
+        <div class="legend-item"><span class="dot" style="background:#3a5f8a;border:1px dashed #8899bb"></span> Peer edge</div>
+      </div>
+    </div>
+
+    <!-- Detail panel (node selected) -->
+    <div class="detail-panel">
+      <div class="panel-header">
+        <div class="panel-node-dot"></div>
+        <div>
+          <div class="panel-name">Alpha</div>
+          <div class="panel-sub">Node · Excellent</div>
+        </div>
+        <div class="panel-close">✕</div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Signal</h4>
+        <div class="stat-row"><span>RSSI</span><span class="stat-val">−58 dBm</span></div>
+        <div class="stat-row"><span>Trend</span><span class="stat-val">↑ Improving</span></div>
+        <div style="margin-top:6px">
+          <div class="mini-chart">
+            <div class="chart-bar" style="left:4px;height:28px"></div>
+            <div class="chart-bar" style="left:12px;height:32px"></div>
+            <div class="chart-bar" style="left:20px;height:25px"></div>
+            <div class="chart-bar" style="left:28px;height:36px"></div>
+            <div class="chart-bar" style="left:36px;height:38px"></div>
+            <div class="chart-bar" style="left:44px;height:35px"></div>
+            <div class="chart-bar" style="left:52px;height:40px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Network</h4>
+        <div class="stat-row"><span>Address</span><span class="stat-val">A1:B2:C3:D4</span></div>
+        <div class="stat-row"><span>Hops to local</span><span class="stat-val">1</span></div>
+        <div class="stat-row"><span>Last seen</span><span class="stat-val">2s ago</span></div>
+        <div class="stat-row"><span>Battery</span><span class="stat-val">82%</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Session</h4>
+        <div class="stat-row"><span>Connected since</span><span class="stat-val">14 min</span></div>
+        <div class="stat-row"><span>Messages sent</span><span class="stat-val">47</span></div>
+        <div class="stat-row"><span>Status</span><span class="stat-val">🟢 Available</span></div>
+      </div>
+
+      <button class="panel-btn">Send Message →</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -9,6 +9,7 @@ import com.turbomesh.desktop.mesh.MeshMessageType
 import com.turbomesh.desktop.mesh.MeshRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -20,6 +21,12 @@ import java.util.Locale
 class MeshRepository {
     val settingsStore = SettingsStore()
     val nicknameStore = NicknameStore()
+    val groupStore = GroupStore()
+    val starStore = StarStore()
+    val noteStore = NoteStore()
+
+    // Auto-reply: track last auto-reply time per peer (in-memory, resets on restart)
+    private val autoRepliedTo = mutableMapOf<String, Long>()
 
     private val bleScanner = BleScanner()
     private val bridgeManager = BridgeManager()
@@ -46,6 +53,16 @@ class MeshRepository {
     val typingNodes = networkManager.typingNodes
     val inboundPackets = networkManager.inboundPackets
     val packetLog = networkManager.packetLog
+    val receivedFiles = networkManager.receivedFiles
+    val readReceipts = networkManager.readReceipts
+    val groupInvites = networkManager.groupInvites
+
+    /** Set by TopologyDetailPanel "Send Message" button; App.kt observes to switch tabs. */
+    val messagingDestination = MutableStateFlow<String?>(null)
+
+    fun navigateToMessaging(nodeId: String) {
+        messagingDestination.value = nodeId
+    }
 
     val localNodeId: String get() = networkManager.localNodeId
     val publicKeyBytes: ByteArray get() = crypto.getPublicKeyBytes()
@@ -60,6 +77,8 @@ class MeshRepository {
 
     fun connectBridge(url: String) = networkManager.connectBridge(url)
     fun disconnectBridge() = networkManager.disconnectBridge()
+
+    fun clearPacketLog() = networkManager.clearPacketLog()
 
     fun sendMessage(
         destinationId: String,
@@ -127,6 +146,73 @@ class MeshRepository {
         }
     }
 
+    // ── Groups ────────────────────────────────────────────────────────
+    fun createGroup(name: String, members: Set<String>): MeshGroup {
+        val group = groupStore.createGroup(name, members)
+        networkManager.sendGroupInvite(group.id, group.name, group.members)
+        return group
+    }
+
+    fun sendToGroup(groupId: String, text: String) {
+        val group = groupStore.getGroup(groupId) ?: return
+        // Send to each member and also store as a group-destination message for local display
+        group.members.filter { it != localNodeId }.forEach { memberId ->
+            networkManager.sendMessage(destinationId = memberId, payload = text.toByteArray())
+        }
+        networkManager.sendMessage(destinationId = groupId, payload = text.toByteArray())
+    }
+
+    fun markAllRead(destinationId: String) {
+        networkManager.messages.value
+            .filter { msg ->
+                msg.readAtMs == null && msg.deletedAtMs == null &&
+                msg.sourceNodeId != localNodeId &&
+                (msg.sourceNodeId == destinationId || msg.destinationNodeId == destinationId)
+            }
+            .forEach { msg -> networkManager.markRead(msg.id) }
+    }
+
+    // ── Forward ───────────────────────────────────────────────────────────
+    fun forwardMessage(msg: com.turbomesh.desktop.mesh.MeshMessage, destinationId: String) {
+        sendMessage(destinationId, "↩ ${String(msg.payload)}")
+    }
+
+    // ── Auto-reply ────────────────────────────────────────────────────────
+    fun maybeAutoReply(fromNodeId: String) {
+        val s = settingsStore.current()
+        if (!s.autoReplyEnabled) return
+        if (s.userStatus !in listOf("away", "dnd")) return
+        if (fromNodeId == localNodeId) return
+        val lastReply = autoRepliedTo[fromNodeId] ?: 0L
+        val cooldownMs = 60 * 60 * 1000L // 1 hour between auto-replies per peer
+        if (System.currentTimeMillis() - lastReply < cooldownMs) return
+        autoRepliedTo[fromNodeId] = System.currentTimeMillis()
+        sendMessage(fromNodeId, s.autoReplyMessage)
+    }
+
+    // ── Mute ──────────────────────────────────────────────────────────────
+    fun isMuted(destinationId: String): Boolean =
+        settingsStore.current().mutedDestinations.split(",").contains(destinationId)
+
+    fun toggleMute(destinationId: String) {
+        val s = settingsStore.current()
+        val muted = s.mutedDestinations.split(",").filter { it.isNotBlank() }.toMutableSet()
+        if (destinationId in muted) muted.remove(destinationId) else muted.add(destinationId)
+        updateSettings(s.copy(mutedDestinations = muted.joinToString(",")))
+    }
+
+    fun clearConversation(destinationId: String) {
+        networkManager.messages.value
+            .filter { msg ->
+                msg.sourceNodeId == destinationId || msg.destinationNodeId == destinationId
+            }
+            .forEach { msg -> networkManager.deleteMessage(msg.id) }
+    }
+
+    // ── Clipboard Sharing ─────────────────────────────────────────────
+    fun sendClipboard(destinationId: String, text: String) =
+        networkManager.sendMessage(destinationId, text.toByteArray(), MeshMessageType.CLIPBOARD)
+
     // ── Voice Notes ───────────────────────────────────────────────────
     fun sendVoiceNote(destinationId: String, wavData: ByteArray) {
         val encoded = java.util.Base64.getEncoder().encodeToString(wavData)
@@ -160,7 +246,6 @@ class MeshRepository {
     }
 
     init {
-        // Auto-connect bridge if already configured
         val s = settingsStore.current()
         if (s.bridgeEnabled && s.bridgeServerUrl.isNotBlank()) {
             networkManager.connectBridge(s.bridgeServerUrl)

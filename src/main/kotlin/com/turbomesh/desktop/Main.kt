@@ -12,14 +12,41 @@ import com.turbomesh.desktop.mesh.MeshMessageType
 import com.turbomesh.desktop.ui.App
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.*
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
-fun main() = application {
+fun main(args: Array<String>) {
     AppDatabase.connect()
 
-    val repo = remember { MeshRepository() }
+    if ("--headless" in args || "--daemon" in args) {
+        val repo = MeshRepository()
+        runBlocking {
+            val hook = Thread { repo.destroy() }
+            Runtime.getRuntime().addShutdownHook(hook)
+            println("TurboMesh running in headless daemon mode.")
+            awaitCancellation()
+        }
+        return
+    }
+
+    application {
+        val repo = remember { MeshRepository() }
+
+    // Add shutdown hook to ensure components exit properly on SIGTERM
+    DisposableEffect(Unit) {
+        val hook = Thread { repo.destroy() }
+        Runtime.getRuntime().addShutdownHook(hook)
+        onDispose {
+            try {
+                Runtime.getRuntime().removeShutdownHook(hook)
+            } catch (e: IllegalStateException) {
+                // Ignore if shutting down
+            }
+        }
+    }
+    
     val windowState = rememberWindowState(size = DpSize(1024.dp, 768.dp))
     var windowVisible by remember { mutableStateOf(true) }
 
@@ -53,14 +80,15 @@ fun main() = application {
         }
     )
 
-    if (windowVisible) {
-        Window(
-            onCloseRequest = { windowVisible = false },  // minimize to tray instead of quit
-            state = windowState,
-            title = if (unreadCount.value > 0) "TurboMesh (${unreadCount.value})" else "TurboMesh Desktop",
-        ) {
-            LaunchedEffect(windowVisible) { if (windowVisible) unreadCount.value = 0 }
-            App(repo)
+        if (windowVisible) {
+            Window(
+                onCloseRequest = { windowVisible = false },  // minimize to tray instead of quit
+                state = windowState,
+                title = if (unreadCount.value > 0) "TurboMesh (${unreadCount.value})" else "TurboMesh Desktop",
+            ) {
+                LaunchedEffect(windowVisible) { if (windowVisible) unreadCount.value = 0 }
+                App(repo)
+            }
         }
     }
 }

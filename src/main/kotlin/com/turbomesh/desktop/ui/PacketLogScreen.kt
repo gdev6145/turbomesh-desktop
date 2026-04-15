@@ -50,7 +50,7 @@ fun PacketLogScreen(repo: MeshRepository) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp))
-            OutlinedButton(onClick = { /* packet log clears itself on cap */ }) { Text(s.clearLog) }
+            OutlinedButton(onClick = { repo.clearPacketLog() }) { Text(s.clearLog) }
         }
         Spacer(Modifier.height(8.dp))
 

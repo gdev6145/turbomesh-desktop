@@ -2,6 +2,8 @@ package com.turbomesh.desktop.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,12 +30,12 @@ fun LockScreen(
     val s = LocalStrings.current
     var enteredPin by remember { mutableStateOf("") }
     var wrongAttempts by remember { mutableStateOf(0) }
-    var showError by remember { mutableStateOf(false) }
+    var shakeKey by remember { mutableStateOf(0) }
 
-    // Shake animation
+    // Shake animation triggered by shakeKey incrementing
     val shakeOffset = remember { Animatable(0f) }
-    LaunchedEffect(showError) {
-        if (showError) {
+    LaunchedEffect(shakeKey) {
+        if (shakeKey > 0) {
             repeat(4) {
                 shakeOffset.animateTo(10f, tween(50))
                 shakeOffset.animateTo(-10f, tween(50))
@@ -47,10 +49,8 @@ fun LockScreen(
             onUnlock()
         } else {
             wrongAttempts++
-            showError = true
             enteredPin = ""
-            showError = false
-            showError = true
+            shakeKey++
         }
     }
 
@@ -68,6 +68,11 @@ fun LockScreen(
                 Brush.verticalGradient(
                     listOf(Color(0xFF0D1B2A), Color(0xFF1B2B3A), Color(0xFF0D1B2A))
                 )
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -106,7 +111,7 @@ fun LockScreen(
             Spacer(Modifier.height(8.dp))
 
             // Error message
-            if (showError && wrongAttempts > 0) {
+            if (shakeKey > 0 && wrongAttempts > 0) {
                 Text(
                     "${s.wrongPin} • $wrongAttempts ${s.attemptsRemaining}",
                     color = Color(0xFFEF5350),

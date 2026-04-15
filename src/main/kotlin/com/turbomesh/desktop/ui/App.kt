@@ -9,6 +9,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -25,7 +27,11 @@ fun App(repo: MeshRepository) {
     val settings by repo.settingsStore.settings.collectAsState()
     val strings = remember(settings.appLanguage) { languageToStrings(settings.appLanguage) }
 
-    CompositionLocalProvider(LocalStrings provides strings) {
+    val baseDensity = LocalDensity.current
+    val scaledDensity = remember(settings.fontScale, baseDensity) {
+        Density(density = baseDensity.density, fontScale = settings.fontScale)
+    }
+    CompositionLocalProvider(LocalStrings provides strings, LocalDensity provides scaledDensity) {
         MaterialTheme(colorScheme = if (settings.darkTheme) darkColorScheme() else lightColorScheme()) {
             AppShell(repo)
         }
@@ -45,7 +51,7 @@ private val TABS: List<TabMeta> = listOf(
     TabMeta({ it.tabNetwork })    { repo -> NetworkScreen(repo) },
     TabMeta({ it.tabPacketLog })  { repo -> PacketLogScreen(repo) },
     TabMeta({ it.tabTopology })   { repo -> TopologyScreen(repo) },
-    TabMeta({ it.tabSettings })   { repo, -> SettingsScreen(repo, onThemeToggle = { /* handled via settings flow */ }) },
+    TabMeta({ it.tabSettings })   { repo -> SettingsScreen(repo, onThemeToggle = { /* handled via settings flow */ }) },
 )
 
 @Composable
@@ -57,8 +63,26 @@ private fun AppShell(repo: MeshRepository) {
     var isLocked by remember { mutableStateOf(false) }
     var lastActivityMs by remember { mutableStateOf(System.currentTimeMillis()) }
 
+    val messages by repo.messages.collectAsState()
+    val unreadCount = remember(messages) {
+        messages.count { msg ->
+            msg.readAtMs == null && msg.deletedAtMs == null &&
+            msg.sourceNodeId != repo.localNodeId
+        }
+    }
+
     // Detached windows: set of tab indices currently open in their own window
-    val detachedTabs = remember { mutableStateSetOf<Int>() }
+    var detachedTabs by remember { mutableStateOf(setOf<Int>()) }
+
+    // ── Navigate to Messaging tab when topology detail panel requests it ────────
+    LaunchedEffect(Unit) {
+        repo.messagingDestination.collect { destId ->
+            if (destId != null) {
+                selectedTab = 0   // Messaging is TABS index 0
+                repo.messagingDestination.value = null
+            }
+        }
+    }
 
     // ── Auto-lock timer ──────────────────────────────────────────────────────
     LaunchedEffect(settings.autoLockEnabled, settings.autoLockTimeoutMs) {
@@ -77,22 +101,12 @@ private fun AppShell(repo: MeshRepository) {
 
     // ── Detached windows ─────────────────────────────────────────────────────
     detachedTabs.forEach { tabIdx ->
-        val tabMeta = TABS[tabIdx]
-        val windowState = rememberWindowState(size = DpSize(900.dp, 680.dp))
-        Window(
-            onCloseRequest = { detachedTabs -= tabIdx },
-            title = "TurboMesh — ${tabMeta.labelFn(s)}",
-            state = windowState,
-        ) {
-            val innerSettings by repo.settingsStore.settings.collectAsState()
-            val innerStrings = remember(innerSettings.appLanguage) { languageToStrings(innerSettings.appLanguage) }
-            CompositionLocalProvider(LocalStrings provides innerStrings) {
-                MaterialTheme(colorScheme = if (innerSettings.darkTheme) darkColorScheme() else lightColorScheme()) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        tabMeta.content(repo)
-                    }
-                }
-            }
+        key(tabIdx) {
+            DetachedTabWindow(
+                repo = repo,
+                tabIdx = tabIdx,
+                onClose = { detachedTabs = detachedTabs - tabIdx },
+            )
         }
     }
 
@@ -102,47 +116,66 @@ private fun AppShell(repo: MeshRepository) {
             .fillMaxSize()
             // Reset activity timer on any tap/click
             .pointerInput(Unit) {
-                detectTapGestures(onPress = { resetActivity() })
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        resetActivity()
+                    }
+                }
             }
             .onKeyEvent { resetActivity(); false }
     ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // ── Tab row ──────────────────────────────────────────────────
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    edgePadding = 0.dp,
-                ) {
-                    TABS.forEachIndexed { index, meta ->
-                        if (index in detachedTabs) return@forEachIndexed
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index; resetActivity() },
-                            text = { Text(meta.labelFn(s)) }
-                        )
+                // ── Tab row + Detach Button ──────────────────────────────────
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    ScrollableTabRow(
+                        selectedTabIndex = selectedTab,
+                        edgePadding = 0.dp,
+                        modifier = Modifier.weight(1f) // Tab row takes available space
+                    ) {
+                        TABS.forEachIndexed { index, meta ->
+                            if (index in detachedTabs) return@forEachIndexed
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index; resetActivity() },
+                                text = {
+                                    if (index == 0 && unreadCount > 0) {
+                                        BadgedBox(badge = {
+                                            Badge { Text(if (unreadCount > 99) "99+" else "$unreadCount") }
+                                        }) {
+                                            Text(meta.labelFn(s))
+                                        }
+                                    } else {
+                                        Text(meta.labelFn(s))
+                                    }
+                                }
+                            )
+                        }
                     }
-                }
 
-                // ── Tab content + Detach button ──────────────────────────────
-                Box(modifier = Modifier.weight(1f)) {
+                    // Detach button — safely away from screen contents
                     val effectiveTab = if (selectedTab in detachedTabs) {
-                        // Tab was detached — fall back to first non-detached tab
                         TABS.indices.firstOrNull { it !in detachedTabs } ?: 0
                     } else selectedTab
 
-                    TABS[effectiveTab].content(repo)
-
-                    // Detach button — top-right corner
                     TextButton(
                         onClick = {
-                            detachedTabs += effectiveTab
-                            // Switch to next available tab
+                            detachedTabs = detachedTabs + effectiveTab
                             selectedTab = TABS.indices.firstOrNull { it !in detachedTabs && it != effectiveTab } ?: 0
                         },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     ) {
-                        Text("⧉ Detach", style = MaterialTheme.typography.labelSmall)
+                        Text("⧇ Detach", style = MaterialTheme.typography.labelSmall)
                     }
+                }
+
+                // ── Tab content ────────────────────────────────────────────────
+                Box(modifier = Modifier.weight(1f)) {
+                    val effectiveTab = if (selectedTab in detachedTabs) {
+                        TABS.indices.firstOrNull { it !in detachedTabs } ?: 0
+                    } else selectedTab
+                    TABS[effectiveTab].content(repo)
                 }
             }
         }
@@ -165,8 +198,27 @@ private fun AppShell(repo: MeshRepository) {
     }
 }
 
-// Internal helper: mutable set backed by snapshot state
+// ──────────────────────────────────────────────────────────────────────────────
+// Detached tab window
+// ──────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun <T> mutableStateSetOf(vararg elements: T): MutableSet<T> {
-    return remember { mutableStateOf(mutableSetOf(*elements)).value }
+private fun DetachedTabWindow(repo: MeshRepository, tabIdx: Int, onClose: () -> Unit) {
+    val tabMeta = TABS[tabIdx]
+    val innerSettings by repo.settingsStore.settings.collectAsState()
+    val innerStrings = remember(innerSettings.appLanguage) { languageToStrings(innerSettings.appLanguage) }
+    val windowState = rememberWindowState(size = DpSize(900.dp, 680.dp))
+    Window(
+        onCloseRequest = onClose,
+        title = "TurboMesh — ${tabMeta.labelFn(innerStrings)}",
+        state = windowState,
+    ) {
+        CompositionLocalProvider(LocalStrings provides innerStrings) {
+            MaterialTheme(colorScheme = if (innerSettings.darkTheme) darkColorScheme() else lightColorScheme()) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    tabMeta.content(repo)
+                }
+            }
+        }
+    }
 }

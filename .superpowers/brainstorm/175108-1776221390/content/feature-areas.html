@@ -1,0 +1,47 @@
+<h2>What would you like to add?</h2>
+<p class="subtitle">Select all areas that interest you — we'll dig into specifics next</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="map" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Node Map / Topology Viz</h3>
+      <p>Interactive graphical map of mesh nodes, signal strength, and routing paths — beyond the current topology list</p>
+    </div>
+  </div>
+  <div class="option" data-choice="voice" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Voice / Audio</h3>
+      <p>Push-to-talk or live voice over the mesh — VOICE_CHUNK/VOICE_COMPLETE opcodes already exist but UI may be incomplete</p>
+    </div>
+  </div>
+  <div class="option" data-choice="channels" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Channels / Topics</h3>
+      <p>Named broadcast channels (like IRC or Discord channels) so nodes can subscribe to topics, not just talk 1:1 or in groups</p>
+    </div>
+  </div>
+  <div class="option" data-choice="dashboard" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Telemetry Dashboard</h3>
+      <p>Real-time charts: message rate, hop distribution, RSSI trends, battery/health from TELEMETRY packets</p>
+    </div>
+  </div>
+  <div class="option" data-choice="emergency" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Emergency / Alert System</h3>
+      <p>Broadcast EMERGENCY messages with priority UI — alerts that can't be missed across all nodes</p>
+    </div>
+  </div>
+  <div class="option" data-choice="scripting" onclick="toggleSelect(this)">
+    <div class="letter">F</div>
+    <div class="content">
+      <h3>Automation / Scripting</h3>
+      <p>Trigger actions when mesh events occur — e.g., auto-reply, log to file, forward to webhook on specific message patterns</p>
+    </div>
+  </div>
+</div>

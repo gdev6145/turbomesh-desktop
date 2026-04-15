@@ -1,0 +1,47 @@
+<h2>Node Map — What to add?</h2>
+<p class="subtitle">The graph already exists. Select the enhancements you want. (multi-select)</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="panzoom" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Pan &amp; Zoom</h3>
+      <p>Scroll to zoom, drag to pan across the canvas — essential for large networks with many nodes</p>
+    </div>
+  </div>
+  <div class="option" data-choice="drag" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Draggable Nodes</h3>
+      <p>Click and drag individual nodes to manually reposition them — pin them in place after layout settles</p>
+    </div>
+  </div>
+  <div class="option" data-choice="peeredges" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Peer-to-Peer Edges</h3>
+      <p>Currently only local→peer edges are drawn. Show peer↔peer connections with hop count labels on edges</p>
+    </div>
+  </div>
+  <div class="option" data-choice="animation" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Packet Flow Animation</h3>
+      <p>Animated dots travel along edges when messages are sent — makes routing paths visually obvious</p>
+    </div>
+  </div>
+  <div class="option" data-choice="detail" onclick="toggleSelect(this)">
+    <div class="letter">E</div>
+    <div class="content">
+      <h3>Node Detail Panel</h3>
+      <p>Click a node to open a sidebar with full stats: address, RSSI history chart, last-seen, hop count, send message button</p>
+    </div>
+  </div>
+  <div class="option" data-choice="filter" onclick="toggleSelect(this)">
+    <div class="letter">F</div>
+    <div class="content">
+      <h3>Filter &amp; Highlight</h3>
+      <p>Search bar to highlight a specific node, dim others — useful when the network has 10+ nodes</p>
+    </div>
+  </div>
+</div>

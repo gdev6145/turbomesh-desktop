@@ -1,12 +1,16 @@
 package com.turbomesh.desktop.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.turbomesh.desktop.data.MeshRepository
@@ -17,10 +21,39 @@ fun DevicesScreen(repo: MeshRepository) {
     val nodes by repo.scanResults.collectAsState()
     val isScanning by repo.isScanning.collectAsState()
     val scanError by repo.scanError.collectAsState()
+    val nodeLastSeen by repo.nodeLastSeen.collectAsState()
+    val settings by repo.settingsStore.settings.collectAsState()
+
+    val myStatusLabel = when (settings.userStatus) {
+        "away" -> s.statusAway
+        "busy" -> s.statusBusy
+        "dnd"  -> s.statusDnd
+        else   -> s.statusAvailable
+    }
+    val myStatusColor = when (settings.userStatus) {
+        "away" -> androidx.compose.ui.graphics.Color(0xFFFFCA28)
+        "busy" -> androidx.compose.ui.graphics.Color(0xFFFF7043)
+        "dnd"  -> androidx.compose.ui.graphics.Color(0xFFEF5350)
+        else   -> androidx.compose.ui.graphics.Color(0xFF4CAF50)
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s.bleDevices, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Surface(
+                color = myStatusColor.copy(alpha = 0.15f),
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(myStatusColor))
+                    Text(myStatusLabel, style = MaterialTheme.typography.labelSmall, color = myStatusColor)
+                }
+            }
             if (isScanning) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
@@ -83,11 +116,24 @@ fun DevicesScreen(repo: MeshRepository) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val lastSeen = nodeLastSeen[node.id]
+                                PresenceDot(lastSeenMs = lastSeen)
+                                Spacer(Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     val nickname = repo.getNickname(node.id)
                                     Text(nickname.ifBlank { node.name }, fontWeight = FontWeight.SemiBold)
                                     Text(node.address, style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (lastSeen != null) {
+                                        val diffMs = System.currentTimeMillis() - lastSeen
+                                        val label = when {
+                                            diffMs < 30_000 -> s.online
+                                            diffMs < 300_000 -> s.idle
+                                            else -> s.offline
+                                        }
+                                        Text(label, style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
                                 // Battery level badge
                                 if (node.batteryLevel >= 0) {
@@ -98,6 +144,8 @@ fun DevicesScreen(repo: MeshRepository) {
                             }
                             Spacer(Modifier.height(8.dp))
                             NodeActions(node = node, repo = repo)
+                            // Node notes
+                            NodeNotes(node = node, repo = repo)
                         }
                     }
                 }
@@ -160,6 +208,62 @@ private fun NodeActions(node: com.turbomesh.desktop.mesh.MeshNode, repo: MeshRep
             onDismiss = { showPairingDialog = false },
         )
     }
+}
+
+@Composable
+private fun NodeNotes(node: com.turbomesh.desktop.mesh.MeshNode, repo: MeshRepository) {
+    val s = LocalStrings.current
+    val notes by repo.noteStore.notes.collectAsState()
+    var text by remember(node.id) { mutableStateOf(notes[node.id] ?: "") }
+    var expanded by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+
+    Column {
+        TextButton(
+            onClick = { expanded = !expanded },
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+        ) {
+            Text(
+                if (expanded) "▲ ${s.notes}" else "▼ ${s.notes}${if (text.isNotBlank()) " •" else ""}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (expanded) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(s.notesPlaceholder, style = MaterialTheme.typography.bodySmall) },
+                maxLines = 4,
+                textStyle = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = {
+                    repo.noteStore.set(node.id, text)
+                }) { Text(s.save, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PresenceDot(lastSeenMs: Long?) {
+    val now = System.currentTimeMillis()
+    val color = when {
+        lastSeenMs == null -> Color(0xFF9E9E9E)
+        now - lastSeenMs < 30_000 -> Color(0xFF4CAF50)
+        now - lastSeenMs < 300_000 -> Color(0xFFFFCA28)
+        else -> Color(0xFF9E9E9E)
+    }
+    Box(
+        Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(color)
+    )
 }
 
 @Composable

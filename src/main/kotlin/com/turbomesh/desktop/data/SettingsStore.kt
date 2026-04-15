@@ -20,6 +20,19 @@ data class MeshSettings(
     val appPin: String = "",
     // i18n
     val appLanguage: String = "en",
+    // Notifications
+    val soundEnabled: Boolean = true,
+    // Presence
+    val userStatus: String = "available", // available | away | busy | dnd
+    // Appearance
+    val fontScale: Float = 1.0f,
+    // Muted destinations (comma-separated node/group IDs)
+    val mutedDestinations: String = "",
+    // Quick reply templates (pipe-separated)
+    val quickReplies: String = "👋 Hello|OK|On my way|Be right back|Can't talk now",
+    // Auto-reply
+    val autoReplyEnabled: Boolean = false,
+    val autoReplyMessage: String = "I'm currently away. I'll get back to you soon.",
 )
 
 class SettingsStore {
@@ -40,6 +53,13 @@ class SettingsStore {
         prefs.putLong("auto_lock_timeout_ms", s.autoLockTimeoutMs)
         prefs.put("app_pin", s.appPin)
         prefs.put("app_language", s.appLanguage)
+        prefs.putBoolean("sound_enabled", s.soundEnabled)
+        prefs.put("user_status", s.userStatus)
+        prefs.putFloat("font_scale", s.fontScale)
+        prefs.put("muted_destinations", s.mutedDestinations)
+        prefs.put("quick_replies", s.quickReplies)
+        prefs.putBoolean("auto_reply_enabled", s.autoReplyEnabled)
+        prefs.put("auto_reply_message", s.autoReplyMessage)
         _settings.value = s
     }
 
@@ -58,6 +78,13 @@ class SettingsStore {
         autoLockTimeoutMs = prefs.getLong("auto_lock_timeout_ms", 5 * 60 * 1000L),
         appPin = prefs.get("app_pin", ""),
         appLanguage = prefs.get("app_language", "en"),
+        soundEnabled = prefs.getBoolean("sound_enabled", true),
+        userStatus = prefs.get("user_status", "available"),
+        fontScale = prefs.getFloat("font_scale", 1.0f),
+        mutedDestinations = prefs.get("muted_destinations", ""),
+        quickReplies = prefs.get("quick_replies", "👋 Hello|OK|On my way|Be right back|Can't talk now"),
+        autoReplyEnabled = prefs.getBoolean("auto_reply_enabled", false),
+        autoReplyMessage = prefs.get("auto_reply_message", "I'm currently away. I'll get back to you soon."),
     )
 }
 

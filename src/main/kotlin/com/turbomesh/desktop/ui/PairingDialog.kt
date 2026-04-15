@@ -122,7 +122,7 @@ fun PairingDialog(
                     Text(keyError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedButton(onClick = { computePin() }, enabled = peerKeyInput.isNotBlank()) {
-                    Text(s.pairingStep3.take(20) + "…")
+                    Text(s.derivePin)
                 }
 
                 // Step 3: PIN display
@@ -146,7 +146,7 @@ fun PairingDialog(
                             )
                         }
                     }
-                    Text("Verify this PIN matches on the peer device before confirming.",
+                    Text(s.pairingVerifyHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

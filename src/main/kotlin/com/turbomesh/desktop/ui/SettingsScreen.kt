@@ -94,11 +94,47 @@ fun SettingsScreen(repo: MeshRepository, onThemeToggle: (Boolean) -> Unit) {
                 )
             }
 
+            // ── Notifications ────────────────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            SectionHeader(s.soundNotifications)
+            SwitchRow(s.soundNotifications, s.soundNotificationsSubtitle, draft.soundEnabled) {
+                update(draft.copy(soundEnabled = it))
+            }
+
+            // ── Status ───────────────────────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            SectionHeader(s.userStatus)
+            var statusExpanded by remember { mutableStateOf(false) }
+            val statusOptions = listOf(
+                "available" to s.statusAvailable,
+                "away"      to s.statusAway,
+                "busy"      to s.statusBusy,
+                "dnd"       to s.statusDnd,
+            )
+            val currentStatusLabel = statusOptions.firstOrNull { it.first == draft.userStatus }?.second ?: s.statusAvailable
+            Box {
+                OutlinedButton(onClick = { statusExpanded = true }) { Text(currentStatusLabel) }
+                DropdownMenu(expanded = statusExpanded, onDismissRequest = { statusExpanded = false }) {
+                    statusOptions.forEach { (code, label) ->
+                        DropdownMenuItem(text = { Text(label) }, onClick = {
+                            update(draft.copy(userStatus = code)); statusExpanded = false
+                        })
+                    }
+                }
+            }
+
             // ── Appearance ───────────────────────────────────────────────
             Spacer(Modifier.height(8.dp))
             SectionHeader(s.appearance)
             SwitchRow(s.darkTheme, s.darkThemeSubtitle, draft.darkTheme) {
                 update(draft.copy(darkTheme = it))
+            }
+            SettingRow("${s.fontScale} (${String.format("%.1f", draft.fontScale)}×)") {
+                Slider(
+                    value = draft.fontScale,
+                    onValueChange = { update(draft.copy(fontScale = it)) },
+                    valueRange = 0.8f..1.6f, steps = 7, modifier = Modifier.weight(1f),
+                )
             }
 
             // ── Language ─────────────────────────────────────────────────
@@ -149,6 +185,35 @@ fun SettingsScreen(repo: MeshRepository, onThemeToggle: (Boolean) -> Unit) {
                         ) { Text(s.clearPin) }
                     }
                 }
+            }
+
+            // ── Quick Replies ─────────────────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            SectionHeader(s.quickReplies)
+            Text(s.quickRepliesHint, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = draft.quickReplies,
+                onValueChange = { update(draft.copy(quickReplies = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            // ── Auto-Reply ────────────────────────────────────────────────
+            Spacer(Modifier.height(8.dp))
+            SectionHeader(s.autoReply)
+            SwitchRow(s.autoReply, s.autoReplySubtitle, draft.autoReplyEnabled) {
+                update(draft.copy(autoReplyEnabled = it))
+            }
+            if (draft.autoReplyEnabled) {
+                OutlinedTextField(
+                    value = draft.autoReplyMessage,
+                    onValueChange = { update(draft.copy(autoReplyMessage = it)) },
+                    label = { Text(s.autoReplyMessageLabel) },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3,
+                )
             }
 
             // ── Export All ───────────────────────────────────────────────
