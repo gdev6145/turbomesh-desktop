@@ -39,6 +39,15 @@ class MeshNetworkManager(
     private val _typingNodes = MutableStateFlow<Map<String, Long>>(emptyMap())
     val typingNodes: StateFlow<Map<String, Long>> = _typingNodes.asStateFlow()
 
+    // packet log
+    private val _packetLog = MutableStateFlow<List<PacketLogEntry>>(emptyList())
+    val packetLog: StateFlow<List<PacketLogEntry>> = _packetLog.asStateFlow()
+
+    private fun appendPacketLog(entry: PacketLogEntry) {
+        val current = _packetLog.value
+        _packetLog.value = (if (current.size >= 500) current.drop(1) else current) + entry
+    }
+
     val localNodeId: String = generateLocalId()
 
     private val heartbeat = HeartbeatService(settingsStore, localNodeId) { msg ->
@@ -130,6 +139,12 @@ class MeshNetworkManager(
             bridgeManager.forward(msg.sourceNodeId, msg.destinationNodeId, packet)
         }
         _networkStats.value = _networkStats.value.copy(messagesSent = _networkStats.value.messagesSent + 1)
+        appendPacketLog(PacketLogEntry(
+            direction = PacketDirection.OUTBOUND,
+            src = msg.sourceNodeId, dst = msg.destinationNodeId,
+            type = msg.type, sizeBytes = msg.payload.size,
+            hopCount = msg.hopCount, msgId = msg.id,
+        ))
     }
 
     private suspend fun observeBridge() {
@@ -170,6 +185,14 @@ class MeshNetworkManager(
 
             // Update last-seen
             _nodeLastSeen.value = _nodeLastSeen.value + (src to System.currentTimeMillis())
+
+            // Log inbound packet
+            appendPacketLog(PacketLogEntry(
+                direction = PacketDirection.INBOUND,
+                src = src, dst = routed.destinationNodeId,
+                type = routed.type, sizeBytes = data.size,
+                hopCount = routed.hopCount, msgId = routed.id,
+            ))
 
             when (routed.type) {
                 MeshMessageType.HEARTBEAT -> {

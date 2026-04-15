@@ -39,14 +39,11 @@ class BleScanner {
             try {
                 val dm = DeviceManager.createInstance(false)
                 manager = dm
-                val adapter = dm.getAdapter() ?: run { log.warn("No Bluetooth adapter found"); return@launch }
-                adapter.startDiscovery()
+                // Verify adapter is present before looping
+                dm.getAdapter() ?: run { log.warn("No Bluetooth adapter found"); return@launch }
                 while (isActive) {
-                    delay(2_000)
-                    val devices = dm.getDevices(true)
-                    val nodes = devices
-                        .filter { hasMeshService(it) }
-                        .map { it.toMeshNode() }
+                    val devices = dm.scanForBluetoothDevices(4_000)
+                    val nodes = devices.map { it.toMeshNode() }
                     _scanResults.value = nodes
                     if (proximityAlertsEnabled) checkProximity(nodes)
                 }
@@ -62,18 +59,17 @@ class BleScanner {
     fun stopScan() {
         scanJob?.cancel()
         scanJob = null
-        try { manager?.getAdapter()?.stopDiscovery() } catch (_: Exception) {}
+        try { manager?.closeConnection() } catch (_: Exception) {}
+        manager = null
         _isScanning.value = false
     }
 
     fun clearResults() { _scanResults.value = emptyList(); knownNearby.clear(); _scanError.value = null }
 
-    private fun hasMeshService(device: BluetoothDevice): Boolean =
-        device.uuids?.any { it.toString().lowercase() == MESH_UUID } ?: true  // show all if UUIDs not yet resolved
-
     private fun BluetoothDevice.toMeshNode() = MeshNode(
         id = address, name = name ?: "Unknown", rssi = rssi?.toInt() ?: -100, address = address,
-        isConnected = isConnected, isProvisioned = false,
+        isConnected = isConnected,
+        isProvisioned = uuids?.any { it.toString().lowercase() == MESH_UUID } ?: false,
     )
 
     private fun checkProximity(nodes: List<MeshNode>) {

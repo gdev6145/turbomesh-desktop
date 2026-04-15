@@ -14,6 +14,12 @@ data class MeshSettings(
     val bridgeEnabled: Boolean = false,
     val bridgeServerUrl: String = "",
     val darkTheme: Boolean = false,
+    // Auto-lock
+    val autoLockEnabled: Boolean = false,
+    val autoLockTimeoutMs: Long = 5 * 60 * 1000L,
+    val appPin: String = "",
+    // i18n
+    val appLanguage: String = "en",
 )
 
 class SettingsStore {
@@ -30,6 +36,10 @@ class SettingsStore {
         prefs.putBoolean("bridge_enabled", s.bridgeEnabled)
         prefs.put("bridge_url", s.bridgeServerUrl)
         prefs.putBoolean("dark_theme", s.darkTheme)
+        prefs.putBoolean("auto_lock_enabled", s.autoLockEnabled)
+        prefs.putLong("auto_lock_timeout_ms", s.autoLockTimeoutMs)
+        prefs.put("app_pin", s.appPin)
+        prefs.put("app_language", s.appLanguage)
         _settings.value = s
     }
 
@@ -44,6 +54,10 @@ class SettingsStore {
         bridgeEnabled = prefs.getBoolean("bridge_enabled", false),
         bridgeServerUrl = prefs.get("bridge_url", ""),
         darkTheme = prefs.getBoolean("dark_theme", false),
+        autoLockEnabled = prefs.getBoolean("auto_lock_enabled", false),
+        autoLockTimeoutMs = prefs.getLong("auto_lock_timeout_ms", 5 * 60 * 1000L),
+        appPin = prefs.get("app_pin", ""),
+        appLanguage = prefs.get("app_language", "en"),
     )
 }
 
