@@ -25,6 +25,8 @@ dependencies {
     implementation(libs.dbus.transport.unix)
     implementation(libs.zxing.core)
     implementation(libs.logback)
+    testImplementation(kotlin("test"))
+    testImplementation(libs.coroutines.test)
 }
 
 compose.desktop {
@@ -34,7 +36,7 @@ compose.desktop {
             targetFormats(TargetFormat.Deb, TargetFormat.Rpm)
             modules("java.sql", "java.naming", "java.security.jgss")
             packageName = "turbomesh"
-            packageVersion = "1.0.4"
+            packageVersion = "1.1.0"
             description = "TurboMesh — Bluetooth Mesh networking for desktop"
             vendor = "TurboMesh"
             linux { }

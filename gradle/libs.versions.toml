@@ -23,6 +23,7 @@ bluez-dbus = { group = "com.github.hypfvieh", name = "bluez-dbus", version.ref =
 dbus-transport-unix = { group = "com.github.hypfvieh", name = "dbus-java-transport-native-unixsocket", version.ref = "dbusTransport" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 logback = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
+coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
